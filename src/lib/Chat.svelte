@@ -6,42 +6,82 @@
   let isLoading = false;
   let messagesContainer;
 
-  // You'll need to add your OpenAI API key here or via environment variable
+  // OPENAI CLIENT: Initialize with API key from environment variable
+  // SECURITY: Never hardcode API keys - always use .env file
+  // Create a .env file with: VITE_OPENAI_API_KEY=your_key_here
   const openai = new OpenAI({
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY || 'YOUR_API_KEY_HERE',
+    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true // Note: In production, use a backend server
   });
 
   async function sendMessage() {
+    // UI GUARD: Prevent sending if input is empty or already waiting for response
     if (!inputMessage.trim() || isLoading) return;
 
+    // CAPTURE & CLEAR: Store the message and clear input field immediately
     const userMessage = inputMessage.trim();
     inputMessage = '';
 
-    // Add user message
+    // UPDATE STATE: Add user's message to chat history
     messages = [...messages, { role: 'user', content: userMessage }];
+
+    // SHOW LOADING: Display "AI is thinking..." indicator before streaming starts
     isLoading = true;
 
+    // CREATE PLACEHOLDER: Add empty assistant message that will fill with streamed text
+    const assistantMessageIndex = messages.length;
+    messages = [...messages, { role: 'assistant', content: '' }];
+
     try {
-      const response = await openai.chat.completions.create({
+      // STREAMING REQUEST: Enable streaming by setting stream: true
+      const stream = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        messages: messages
+          .filter(m => m.content) // Filter out empty messages
+          .map(m => ({ role: m.role, content: m.content })),
+        stream: true, // THIS ENABLES TOKEN-BY-TOKEN STREAMING
       });
 
-      const assistantMessage = response.choices[0].message.content;
-      messages = [...messages, { role: 'assistant', content: assistantMessage }];
+      // PROCESS STREAM: Read tokens as they arrive from OpenAI
+      for await (const chunk of stream) {
+        // HIDE LOADING: First token received - hide "thinking" indicator
+        // Now the message bubble will show with streaming text
+        if (isLoading) {
+          isLoading = false;
+        }
+
+        // EXTRACT TOKEN: Get the text content from this chunk
+        const token = chunk.choices[0]?.delta?.content || '';
+
+        if (token) {
+          // UPDATE MESSAGE: Append new token to the assistant's message
+          // This creates the "typing" effect as words appear one by one
+          messages = messages.map((msg, idx) =>
+            idx === assistantMessageIndex
+              ? { ...msg, content: msg.content + token }
+              : msg
+          );
+
+          // AUTO-SCROLL: Keep chat scrolled to bottom as new text appears
+          scrollToBottom();
+        }
+      }
     } catch (error) {
+      // ERROR HANDLING: Show user-friendly error message
       console.error('Error:', error);
-      messages = [...messages, {
-        role: 'assistant',
-        content: 'Sorry, there was an error. Please check your API key and try again.'
-      }];
+      messages = messages.map((msg, idx) =>
+        idx === assistantMessageIndex
+          ? { ...msg, content: 'Sorry, there was an error. Please check your API key and try again.' }
+          : msg
+      );
     } finally {
+      // CLEANUP: Hide typing indicator and ensure scroll position
       isLoading = false;
       scrollToBottom();
     }
   }
 
+  // SCROLL UTILITY: Smoothly scroll chat to bottom to show latest messages
   function scrollToBottom() {
     setTimeout(() => {
       if (messagesContainer) {
@@ -50,6 +90,8 @@
     }, 100);
   }
 
+  // KEYBOARD SHORTCUT: Send message when user presses Enter (without Shift)
+  // Shift+Enter allows multi-line messages
   function handleKeyPress(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -78,12 +120,15 @@
       </div>
     {/each}
 
+    <!-- LOADING INDICATOR: Shows animated dots while waiting for first token from AI -->
+    <!-- This appears BEFORE streaming starts, then disappears once text begins appearing -->
     {#if isLoading}
       <div class="message assistant">
         <div class="message-content">
           <div class="message-header">
             <strong>AI</strong>
           </div>
+          <!-- Three animated dots that bounce up and down -->
           <div class="typing-indicator">
             <span></span>
             <span></span>
