@@ -6,6 +6,37 @@
   let isLoading = false;
   let messagesContainer;
 
+  // MODEL SELECTION: User can choose between different AI models
+  // Each model has different capabilities, speeds, and costs
+  let selectedModel = 'gpt-3.5-turbo'; // Default to fastest, cheapest model
+
+  // AVAILABLE MODELS: List of models with descriptions for UI
+  // Note: Some models require higher tier API access
+  const models = [
+    {
+      id: 'gpt-3.5-turbo',
+      name: 'GPT-3.5 Turbo',
+      description: 'Fast & economical - Best for quick conversations'
+    },
+    {
+      id: 'gpt-4',
+      name: 'GPT-4',
+      description: 'More capable - Better reasoning and understanding'
+    },
+    {
+      id: 'gpt-4-turbo',
+      name: 'GPT-4 Turbo',
+      description: 'Faster GPT-4 - Good balance of speed and intelligence'
+    }
+    // Reasoning models require special API access
+    // Uncomment if your account has access:
+    // {
+    //   id: 'o1-mini',
+    //   name: 'O1 Mini (Reasoning)',
+    //   description: 'Thinks before responding - Best for complex problems'
+    // }
+  ];
+
   // OPENAI CLIENT: Initialize with API key from environment variable
   // SECURITY: Never hardcode API keys - always use .env file
   // Create a .env file with: VITE_OPENAI_API_KEY=your_key_here
@@ -34,8 +65,9 @@
 
     try {
       // STREAMING REQUEST: Enable streaming by setting stream: true
+      // Uses the model selected by user from dropdown
       const stream = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: selectedModel, // Dynamic model selection based on user choice
         messages: messages
           .filter(m => m.content) // Filter out empty messages
           .map(m => ({ role: m.role, content: m.content })),
@@ -139,6 +171,25 @@
     {/if}
   </div>
 
+  <!-- MODEL SELECTOR: Allows user to choose which AI model to use -->
+  <!-- Different models have different capabilities and speeds -->
+  <div class="model-selector">
+    <label for="model-select">
+      <strong>Model:</strong>
+    </label>
+    <select id="model-select" bind:value={selectedModel} disabled={isLoading}>
+      {#each models as model}
+        <option value={model.id}>
+          {model.name}
+        </option>
+      {/each}
+    </select>
+    <!-- DYNAMIC DESCRIPTION: Shows info about currently selected model -->
+    <span class="model-description">
+      {models.find(m => m.id === selectedModel)?.description}
+    </span>
+  </div>
+
   <div class="input-container">
     <textarea
       bind:value={inputMessage}
@@ -146,7 +197,7 @@
       placeholder="Type your message..."
       rows="1"
       disabled={isLoading}
-    />
+    ></textarea>
     <button on:click={sendMessage} disabled={!inputMessage.trim() || isLoading}>
       Send
     </button>
@@ -270,6 +321,57 @@
       opacity: 1;
       transform: translateY(-10px);
     }
+  }
+
+  /* MODEL SELECTOR STYLES: Dropdown to choose AI model */
+  .model-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 14px;
+  }
+
+  .model-selector label {
+    color: #666;
+    white-space: nowrap;
+  }
+
+  .model-selector select {
+    padding: 8px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    background: white;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+    min-width: 180px;
+  }
+
+  .model-selector select:hover:not(:disabled) {
+    border-color: #667eea;
+  }
+
+  .model-selector select:focus {
+    border-color: #667eea;
+  }
+
+  .model-selector select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* MODEL DESCRIPTION: Shows helpful info about selected model */
+  .model-description {
+    color: #666;
+    font-size: 13px;
+    font-style: italic;
+    flex: 1;
   }
 
   .input-container {
