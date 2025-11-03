@@ -6,7 +6,7 @@
   <div class="app-container">
     <header>
       <h1>AI Chat</h1>
-      <p class="subtitle">Powered by OpenAI</p>
+      <p class="subtitle">Powered by Claude</p>
     </header>
     <Chat />
   </div>

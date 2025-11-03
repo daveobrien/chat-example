@@ -1,16 +1,40 @@
 <script>
-  import OpenAI from 'openai';
+  import Anthropic from '@anthropic-ai/sdk';
 
   let messages = [];
   let inputMessage = '';
   let isLoading = false;
   let messagesContainer;
 
-  // OPENAI CLIENT: Initialize with API key from environment variable
+  // MODEL SELECTION: User can choose between different Claude models
+  // Each model has different capabilities, speeds, and costs
+  let selectedModel = 'claude-3-5-sonnet-20241022'; // Default to latest Sonnet
+
+  // AVAILABLE MODELS: Claude model variants from Anthropic
+  // All models support streaming and extended thinking
+  const models = [
+    {
+      id: 'claude-3-5-haiku-20241022',
+      name: 'Claude 3.5 Haiku',
+      description: 'Fast & economical - Best for quick conversations'
+    },
+    {
+      id: 'claude-3-5-sonnet-20241022',
+      name: 'Claude 3.5 Sonnet',
+      description: 'Balanced - Great for most tasks with good speed'
+    },
+    {
+      id: 'claude-opus-4-20250514',
+      name: 'Claude Opus 4',
+      description: 'Most capable - Best for complex reasoning and analysis'
+    }
+  ];
+
+  // ANTHROPIC CLIENT: Initialize with API key from environment variable
   // SECURITY: Never hardcode API keys - always use .env file
-  // Create a .env file with: VITE_OPENAI_API_KEY=your_key_here
-  const openai = new OpenAI({
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  // Create a .env file with: VITE_ANTHROPIC_API_KEY=your_key_here
+  const anthropic = new Anthropic({
+    apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
     dangerouslyAllowBrowser: true // Note: In production, use a backend server
   });
 
@@ -33,27 +57,29 @@
     messages = [...messages, { role: 'assistant', content: '' }];
 
     try {
-      // STREAMING REQUEST: Enable streaming by setting stream: true
-      const stream = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+      // CLAUDE STREAMING REQUEST: Uses Anthropic's streaming API
+      // Claude's API format is slightly different from OpenAI
+      const stream = await anthropic.messages.stream({
+        model: selectedModel, // Dynamic Claude model selection
+        max_tokens: 4096, // Maximum response length (required by Anthropic)
         messages: messages
           .filter(m => m.content) // Filter out empty messages
           .map(m => ({ role: m.role, content: m.content })),
-        stream: true, // THIS ENABLES TOKEN-BY-TOKEN STREAMING
       });
 
-      // PROCESS STREAM: Read tokens as they arrive from OpenAI
+      // PROCESS STREAM: Read tokens as they arrive from Claude
+      // Anthropic uses event-based streaming with different event types
       for await (const chunk of stream) {
         // HIDE LOADING: First token received - hide "thinking" indicator
-        // Now the message bubble will show with streaming text
         if (isLoading) {
           isLoading = false;
         }
 
-        // EXTRACT TOKEN: Get the text content from this chunk
-        const token = chunk.choices[0]?.delta?.content || '';
+        // EXTRACT TOKEN: Claude sends tokens in content_block_delta events
+        // The text is in chunk.delta.text (different from OpenAI's format)
+        if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+          const token = chunk.delta.text;
 
-        if (token) {
           // UPDATE MESSAGE: Append new token to the assistant's message
           // This creates the "typing" effect as words appear one by one
           messages = messages.map((msg, idx) =>
@@ -139,6 +165,25 @@
     {/if}
   </div>
 
+  <!-- MODEL SELECTOR: Allows user to choose which AI model to use -->
+  <!-- Different models have different capabilities and speeds -->
+  <div class="model-selector">
+    <label for="model-select">
+      <strong>Model:</strong>
+    </label>
+    <select id="model-select" bind:value={selectedModel} disabled={isLoading}>
+      {#each models as model}
+        <option value={model.id}>
+          {model.name}
+        </option>
+      {/each}
+    </select>
+    <!-- DYNAMIC DESCRIPTION: Shows info about currently selected model -->
+    <span class="model-description">
+      {models.find(m => m.id === selectedModel)?.description}
+    </span>
+  </div>
+
   <div class="input-container">
     <textarea
       bind:value={inputMessage}
@@ -146,7 +191,7 @@
       placeholder="Type your message..."
       rows="1"
       disabled={isLoading}
-    />
+    ></textarea>
     <button on:click={sendMessage} disabled={!inputMessage.trim() || isLoading}>
       Send
     </button>
@@ -270,6 +315,57 @@
       opacity: 1;
       transform: translateY(-10px);
     }
+  }
+
+  /* MODEL SELECTOR STYLES: Dropdown to choose AI model */
+  .model-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 14px;
+  }
+
+  .model-selector label {
+    color: #666;
+    white-space: nowrap;
+  }
+
+  .model-selector select {
+    padding: 8px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    background: white;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+    min-width: 180px;
+  }
+
+  .model-selector select:hover:not(:disabled) {
+    border-color: #667eea;
+  }
+
+  .model-selector select:focus {
+    border-color: #667eea;
+  }
+
+  .model-selector select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* MODEL DESCRIPTION: Shows helpful info about selected model */
+  .model-description {
+    color: #666;
+    font-size: 13px;
+    font-style: italic;
+    flex: 1;
   }
 
   .input-container {
