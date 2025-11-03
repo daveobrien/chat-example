@@ -1,47 +1,40 @@
 <script>
-  import OpenAI from 'openai';
+  import Anthropic from '@anthropic-ai/sdk';
 
   let messages = [];
   let inputMessage = '';
   let isLoading = false;
   let messagesContainer;
 
-  // MODEL SELECTION: User can choose between different AI models
+  // MODEL SELECTION: User can choose between different Claude models
   // Each model has different capabilities, speeds, and costs
-  let selectedModel = 'gpt-3.5-turbo'; // Default to fastest, cheapest model
+  let selectedModel = 'claude-3-5-sonnet-20241022'; // Default to latest Sonnet
 
-  // AVAILABLE MODELS: List of models with descriptions for UI
-  // Note: Some models require higher tier API access
+  // AVAILABLE MODELS: Claude model variants from Anthropic
+  // All models support streaming and extended thinking
   const models = [
     {
-      id: 'gpt-3.5-turbo',
-      name: 'GPT-3.5 Turbo',
+      id: 'claude-3-5-haiku-20241022',
+      name: 'Claude 3.5 Haiku',
       description: 'Fast & economical - Best for quick conversations'
     },
     {
-      id: 'gpt-4',
-      name: 'GPT-4',
-      description: 'More capable - Better reasoning and understanding'
+      id: 'claude-3-5-sonnet-20241022',
+      name: 'Claude 3.5 Sonnet',
+      description: 'Balanced - Great for most tasks with good speed'
     },
     {
-      id: 'gpt-4-turbo',
-      name: 'GPT-4 Turbo',
-      description: 'Faster GPT-4 - Good balance of speed and intelligence'
+      id: 'claude-opus-4-20250514',
+      name: 'Claude Opus 4',
+      description: 'Most capable - Best for complex reasoning and analysis'
     }
-    // Reasoning models require special API access
-    // Uncomment if your account has access:
-    // {
-    //   id: 'o1-mini',
-    //   name: 'O1 Mini (Reasoning)',
-    //   description: 'Thinks before responding - Best for complex problems'
-    // }
   ];
 
-  // OPENAI CLIENT: Initialize with API key from environment variable
+  // ANTHROPIC CLIENT: Initialize with API key from environment variable
   // SECURITY: Never hardcode API keys - always use .env file
-  // Create a .env file with: VITE_OPENAI_API_KEY=your_key_here
-  const openai = new OpenAI({
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  // Create a .env file with: VITE_ANTHROPIC_API_KEY=your_key_here
+  const anthropic = new Anthropic({
+    apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
     dangerouslyAllowBrowser: true // Note: In production, use a backend server
   });
 
@@ -64,28 +57,29 @@
     messages = [...messages, { role: 'assistant', content: '' }];
 
     try {
-      // STREAMING REQUEST: Enable streaming by setting stream: true
-      // Uses the model selected by user from dropdown
-      const stream = await openai.chat.completions.create({
-        model: selectedModel, // Dynamic model selection based on user choice
+      // CLAUDE STREAMING REQUEST: Uses Anthropic's streaming API
+      // Claude's API format is slightly different from OpenAI
+      const stream = await anthropic.messages.stream({
+        model: selectedModel, // Dynamic Claude model selection
+        max_tokens: 4096, // Maximum response length (required by Anthropic)
         messages: messages
           .filter(m => m.content) // Filter out empty messages
           .map(m => ({ role: m.role, content: m.content })),
-        stream: true, // THIS ENABLES TOKEN-BY-TOKEN STREAMING
       });
 
-      // PROCESS STREAM: Read tokens as they arrive from OpenAI
+      // PROCESS STREAM: Read tokens as they arrive from Claude
+      // Anthropic uses event-based streaming with different event types
       for await (const chunk of stream) {
         // HIDE LOADING: First token received - hide "thinking" indicator
-        // Now the message bubble will show with streaming text
         if (isLoading) {
           isLoading = false;
         }
 
-        // EXTRACT TOKEN: Get the text content from this chunk
-        const token = chunk.choices[0]?.delta?.content || '';
+        // EXTRACT TOKEN: Claude sends tokens in content_block_delta events
+        // The text is in chunk.delta.text (different from OpenAI's format)
+        if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+          const token = chunk.delta.text;
 
-        if (token) {
           // UPDATE MESSAGE: Append new token to the assistant's message
           // This creates the "typing" effect as words appear one by one
           messages = messages.map((msg, idx) =>
