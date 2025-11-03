@@ -276,12 +276,15 @@
     font-size: 12px;
     margin-bottom: 4px;
     opacity: 0.8;
+    text-align: left;
+
   }
 
   .message-text {
     font-size: 15px;
     line-height: 1.5;
     white-space: pre-wrap;
+    text-align: left;
   }
 
   .typing-indicator {
